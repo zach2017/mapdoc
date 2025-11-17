@@ -87,6 +87,7 @@
                                 placeholder="NY"
                                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                             />
+                            <span id="statePlaceholderHint" class="text-xs text-gray-400 mt-1 block"></span>
                         </div>
                     </div>
 
@@ -105,7 +106,7 @@
 
                     <!-- Auto-geocode hint -->
                     <div class="text-xs text-gray-500 italic">
-                        💡 Tip: Click outside an address field to automatically find it on the map
+                        💡 Tip: Click outside the state/province field to jump to that location on the map
                     </div>
 
                     <!-- Find on Map Button -->
@@ -161,7 +162,7 @@
         <!-- Info Box -->
         <div class="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-gray-700">
             <p>
-                <span class="font-semibold text-blue-600">How it works:</span> Select your country from the searchable list (195+ countries supported) - the administrative division label automatically updates based on your country (e.g., "Prefecture" for Japan, "Province" for Afghanistan, "Canton" for Switzerland). Enter your address details and click "Find on Map" to geocode the address. The map will center on the coordinates and display the latitude/longitude values.
+                <span class="font-semibold text-blue-600">How it works:</span> Select your country from the searchable list (195+ countries supported) - the administrative division label, placeholder, and example text automatically update based on your country (e.g., "Prefecture" for Japan with example "Tokyo", "Province" for Afghanistan with example "Kabul", "Canton" for Switzerland with example "Zurich"). Click outside the state/province field to jump to that location on the map. Enter a full address and click outside other fields to find it. The map centers on coordinates and displays latitude/longitude values.
             </p>
         </div>
     </div>
@@ -422,8 +423,46 @@
             countrySearch.value = '';
             renderCountries(COUNTRIES);
             
+            // Update placeholder and hint based on division label
+            updateStatePlaceholder(label, name);
+            
             // Jump to country on map
             jumpToCountry(name);
+        }
+
+        // Update state/province placeholder based on division label
+        function updateStatePlaceholder(label, countryName) {
+            const placeholderMap = {
+                'State': 'NY',
+                'Province': 'Ontario',
+                'Region': 'Île-de-France',
+                'District': 'Westminster',
+                'Prefecture': 'Tokyo',
+                'County': 'Dublin',
+                'Division': 'Dhaka',
+                'Governorate': 'Cairo',
+                'Department': 'Paris',
+                'Parish': 'Kingston',
+                'Entity': 'Federation',
+                'Municipality': 'Bern',
+                'Canton': 'Zurich',
+                'Emirate': 'Dubai',
+                'Oblast': 'Moscow',
+                'Voivodeship': 'Mazovia',
+                'Atoll': 'Malé',
+                'Castle': 'Serravalle',
+                'Quarter': 'Port-au-Prince',
+                'Ward': 'Vatikan',
+                'Autonomous Community': 'Catalonia',
+                'Island': 'Comoros',
+                'County/District': 'Kampala',
+                'Province/Territory': 'Ontario'
+            };
+
+            const placeholder = placeholderMap[label] || label;
+            stateInput.placeholder = placeholder;
+            const statePlaceholderHint = document.getElementById('statePlaceholderHint');
+            statePlaceholderHint.textContent = `e.g., ${placeholder}`;
         }
 
         // Jump to country on map
@@ -453,9 +492,19 @@
 
         // Auto-geocode on blur
         function attachBlurHandlers() {
-            const addressInputs = [streetInput, cityInput, stateInput, postalCodeInput];
+            // Special handler for state/province field
+            stateInput.addEventListener('blur', () => {
+                const state = stateInput.value.trim();
+                if (state) {
+                    // Jump to state/province on map
+                    jumpToStateOrProvince(state);
+                }
+            });
+
+            // Standard handlers for other address fields
+            const otherInputs = [streetInput, cityInput, postalCodeInput];
             
-            addressInputs.forEach(input => {
+            otherInputs.forEach(input => {
                 input.addEventListener('blur', () => {
                     // Only geocode if at least one field has content
                     const street = streetInput.value;
@@ -468,6 +517,34 @@
                     }
                 });
             });
+        }
+
+        // Jump to state/province on map
+        function jumpToStateOrProvince(stateOrProvince) {
+            const country = selectedCountryName.textContent;
+            const searchQuery = `${stateOrProvince}, ${country}`;
+
+            fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchQuery)}&limit=1`)
+                .then(response => response.json())
+                .then(results => {
+                    if (results.length > 0) {
+                        const result = results[0];
+                        const lat = parseFloat(result.lat);
+                        const lon = parseFloat(result.lon);
+                        
+                        locationText.textContent = result.display_name;
+                        latitudeSpan.textContent = lat.toFixed(6);
+                        longitudeSpan.textContent = lon.toFixed(6);
+                        
+                        // Update map to show state/province
+                        const bboxMargin = 1; // Medium zoom for state/province view
+                        const bbox = `${lon - bboxMargin},${lat - bboxMargin},${lon + bboxMargin},${lat + bboxMargin}`;
+                        mapFrame.src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lon}`;
+                    } else {
+                        console.error(`Could not find ${stateOrProvince} in ${country}`);
+                    }
+                })
+                .catch(error => console.error('Error finding state/province:', error));
         }
 
         // Geocode address function
@@ -544,6 +621,7 @@
         // Initialize
         initializeCountryList();
         attachBlurHandlers();
+        updateStatePlaceholder('State', 'United States');
         jumpToCountry('United States');
     </script>
 </body>
